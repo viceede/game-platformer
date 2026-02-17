@@ -6,7 +6,7 @@ pygame.init()
 # --- настройки окна ---
 WIDTH, HEIGHT = 800, 480
 WIN = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Mini Mario-like")
+pygame.display.set_caption("Gabeitch")
 
 FPS = 60
 CLOCK = pygame.time.Clock()
@@ -18,6 +18,7 @@ GREEN = (50, 200, 50)
 RED = (200, 50, 50)
 YELLOW = (240, 220, 50)
 BLACK = (0, 0, 0)
+SKY_BLUE = (135, 206, 235)
 
 # --- параметры игрока ---
 PLAYER_WIDTH, PLAYER_HEIGHT = 40, 50
@@ -27,6 +28,7 @@ GRAVITY = 0.6
 
 # --- платформы, монеты, враги ---
 GROUND_HEIGHT = 60
+
 
 class Player(pygame.sprite.Sprite):
     def __init__(self, x, y):
@@ -39,6 +41,8 @@ class Player(pygame.sprite.Sprite):
         self.on_ground = False
         self.lives = 3
         self.score = 0
+        self.start_x = x
+        self.start_y = y
 
     def handle_input(self, keys):
         self.vel_x = 0
@@ -64,22 +68,34 @@ class Player(pygame.sprite.Sprite):
         self.rect.x += self.vel_x
         self.collide_x(platforms)
 
+        # проверка выхода за левую и правую границы карты
+        if self.rect.left < 0:
+            self.rect.left = 0
+        elif self.rect.right > WIDTH:
+            self.rect.right = WIDTH
+
         # движение по Y
         self.rect.y += self.vel_y
         self.on_ground = False
         self.collide_y(platforms)
 
+        # проверка выхода за верхнюю границу
+        if self.rect.top < 0:
+            self.rect.top = 0
+            self.vel_y = 0
+
         # столкновения с врагами
         enemy_hit_list = pygame.sprite.spritecollide(self, enemies, False)
         for enemy in enemy_hit_list:
             # если сверху — убиваем врага
-            if self.vel_y > 0 and self.rect.bottom <= enemy.rect.centery:
+            if self.vel_y > 0 and self.rect.bottom <= enemy.rect.centery + 10:
                 enemy.kill()
                 self.vel_y = JUMP_POWER / 1.5
+                self.score += 5  # бонус за убийство врага
             else:
                 # иначе теряем жизнь и откатываемся
                 self.lives -= 1
-                self.rect.topleft = (100, HEIGHT - GROUND_HEIGHT - PLAYER_HEIGHT)
+                self.rect.topleft = (self.start_x, self.start_y)
                 self.vel_y = 0
 
         # сбор монет
@@ -139,6 +155,14 @@ class Coin(pygame.sprite.Sprite):
         self.rect = self.image.get_rect(center=(x, y))
 
 
+def show_message(screen, message, color, size=48, y_offset=0):
+    """Отображает сообщение в центре экрана"""
+    font = pygame.font.SysFont(None, size)
+    text = font.render(message, True, color)
+    text_rect = text.get_rect(center=(WIDTH // 2, HEIGHT // 2 + y_offset))
+    screen.blit(text, text_rect)
+
+
 def main():
     player = Player(100, HEIGHT - GROUND_HEIGHT - PLAYER_HEIGHT)
 
@@ -178,6 +202,13 @@ def main():
     all_sprites.add(player)
 
     font = pygame.font.SysFont(None, 28)
+    victory_font = pygame.font.SysFont(None, 72)
+
+    victory = False
+    game_over = False
+
+    # Общее количество монет для проверки победы
+    total_coins = len(coins)
 
     running = True
     while running:
@@ -185,15 +216,44 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE and (game_over or victory):
+                    running = False
+                if event.key == pygame.K_r and (game_over or victory):
+                    # Перезапуск игры
+                    return main()
 
+        # Проверка условий победы
+        if len(coins) == 0 and len(enemies) == 0 and not victory and player.lives > 0:
+            victory = True
+
+        # Проверка поражения
         if player.lives <= 0:
+            game_over = True
+
+        if game_over:
             WIN.fill(BLACK)
-            text = font.render("GAME OVER (Esc - выйти)", True, WHITE)
-            WIN.blit(text, (WIDTH // 2 - text.get_width() // 2, HEIGHT // 2))
+            show_message(WIN, "GAME OVER", RED, 72, -30)
+            show_message(WIN, "Нажмите R для рестарта или Esc для выхода", WHITE, 28, 30)
             pygame.display.flip()
-            keys = pygame.key.get_pressed()
-            if keys[pygame.K_ESCAPE]:
-                running = False
+            continue
+
+        if victory:
+            WIN.fill(SKY_BLUE)
+            all_sprites.draw(WIN)
+            # Затемняющий overlay
+            s = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+            s.fill((0, 0, 0, 128))
+            WIN.blit(s, (0, 0))
+
+            victory_text = victory_font.render("ПОБЕДА!", True, YELLOW)
+            victory_rect = victory_text.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 30))
+            WIN.blit(victory_text, victory_rect)
+
+            show_message(WIN, f"Собрано монет: {player.score}", WHITE, 36, 20)
+            show_message(WIN, "Нажмите R для рестарта или Esc для выхода", WHITE, 24, 60)
+
+            pygame.display.flip()
             continue
 
         # обновление
@@ -201,14 +261,19 @@ def main():
         player.update(platforms, enemies, coins)
 
         # отрисовка
-        WIN.fill((135, 206, 235))  # небо
+        WIN.fill(SKY_BLUE)  # небо
         all_sprites.draw(WIN)
 
         # HUD
         score_text = font.render(f"Монеты: {player.score}", True, BLACK)
         lives_text = font.render(f"Жизни: {player.lives}", True, BLACK)
+        coins_left_text = font.render(f"Осталось монет: {len(coins)}", True, BLACK)
+        enemies_left_text = font.render(f"Врагов: {len(enemies)}", True, BLACK)
+
         WIN.blit(score_text, (10, 10))
         WIN.blit(lives_text, (10, 35))
+        WIN.blit(coins_left_text, (10, 60))
+        WIN.blit(enemies_left_text, (10, 85))
 
         pygame.display.flip()
 
