@@ -1,34 +1,50 @@
 import pygame
 from settings import *
+from utils.sprite_sheet import SpriteLoader
+
 
 class Player(pygame.sprite.Sprite):
     def __init__(self, x, y):
         super().__init__()
-        self.image = pygame.Surface((PLAYER_WIDTH, PLAYER_HEIGHT))
-        self.image.fill(BLUE)
+        self.sprites = SpriteLoader()
+        self.animation_state = 'idle'
+        self.animation_frame = 0
+        self.animation_timer = 0
+        self.facing_right = True  # Для отражения спрайта
+
+        # Загружаем анимации
+        self.animations = {
+            'idle': self.sprites.get_player_animation('idle'),
+            'walk': self.sprites.get_player_animation('walk'),
+            'jump': self.sprites.get_player_animation('jump'),
+            'fall': self.sprites.get_player_animation('fall')
+        }
+
+        # Устанавливаем начальное изображение
+        self.image = self.animations['idle'][0]
         self.rect = self.image.get_rect(topleft=(x, y))
+
         self.vel_x = 0
         self.vel_y = 0
         self.on_ground = False
         self.lives = 3
-        self.coins_collected = 0  # Только монеты
-        self.bonus_points = 0      # Бонусные очки за убийство врагов
+        self.coins_collected = 0
+        self.bonus_points = 0
         self.start_x = x
         self.start_y = y
 
     @property
     def total_score(self):
-        """Общий счет = монеты + бонусы"""
         return self.coins_collected + self.bonus_points
 
     def handle_input(self, keys):
         self.vel_x = 0
-        # Управление на WASD
-        if keys[pygame.K_a]:  # Влево
+        if keys[pygame.K_a]:
             self.vel_x = -PLAYER_SPEED
-        if keys[pygame.K_d]:  # Вправо
+            self.facing_right = False
+        if keys[pygame.K_d]:
             self.vel_x = PLAYER_SPEED
-        # Прыжок на пробел или W
+            self.facing_right = True
         if (keys[pygame.K_SPACE] or keys[pygame.K_w]) and self.on_ground:
             self.vel_y = JUMP_POWER
             self.on_ground = False
@@ -37,6 +53,35 @@ class Player(pygame.sprite.Sprite):
         self.vel_y += GRAVITY
         if self.vel_y > 15:
             self.vel_y = 15
+
+    def update_animation(self):
+        """Обновляет анимацию игрока"""
+        self.animation_timer += 1
+
+        # Определяем состояние анимации
+        if not self.on_ground:
+            if self.vel_y < 0:
+                self.animation_state = 'jump'
+            else:
+                self.animation_state = 'fall'
+        elif self.vel_x != 0:
+            self.animation_state = 'walk'
+        else:
+            self.animation_state = 'idle'
+
+        # Обновляем кадр анимации (каждые 10 тиков)
+        if self.animation_timer >= 10:
+            self.animation_timer = 0
+            frames = self.animations[self.animation_state]
+            if isinstance(frames, list):
+                self.animation_frame = (self.animation_frame + 1) % len(frames)
+                self.image = frames[self.animation_frame]
+            else:
+                self.image = frames
+
+            # Отражение спрайта если нужно
+            if not self.facing_right:
+                self.image = pygame.transform.flip(self.image, True, False)
 
     def update(self, platforms, enemies, coins):
         keys = pygame.key.get_pressed()
@@ -47,7 +92,6 @@ class Player(pygame.sprite.Sprite):
         self.rect.x += self.vel_x
         self.collide_x(platforms)
 
-        # проверка выхода за левую и правую границы карты
         if self.rect.left < 0:
             self.rect.left = 0
         elif self.rect.right > WIDTH:
@@ -58,7 +102,6 @@ class Player(pygame.sprite.Sprite):
         self.on_ground = False
         self.collide_y(platforms)
 
-        # проверка выхода за верхнюю границу
         if self.rect.top < 0:
             self.rect.top = 0
             self.vel_y = 0
@@ -66,13 +109,11 @@ class Player(pygame.sprite.Sprite):
         # столкновения с врагами
         enemy_hit_list = pygame.sprite.spritecollide(self, enemies, False)
         for enemy in enemy_hit_list:
-            # если сверху — убиваем врага
             if self.vel_y > 0 and self.rect.bottom <= enemy.rect.centery + 10:
                 enemy.kill()
                 self.vel_y = JUMP_POWER / 1.5
-                self.bonus_points += 5  # Бонус за убийство врага (отдельно)
+                self.bonus_points += 5
             else:
-                # иначе теряем жизнь и откатываемся
                 self.lives -= 1
                 self.rect.topleft = (self.start_x, self.start_y)
                 self.vel_y = 0
@@ -80,7 +121,10 @@ class Player(pygame.sprite.Sprite):
         # сбор монет
         coin_hit_list = pygame.sprite.spritecollide(self, coins, True)
         for _ in coin_hit_list:
-            self.coins_collected += 1  # Только монеты
+            self.coins_collected += 1
+
+        # Обновляем анимацию
+        self.update_animation()
 
     def collide_x(self, platforms):
         for p in platforms:
