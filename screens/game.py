@@ -17,18 +17,20 @@ def create_game_objects():
     coins = pygame.sprite.Group()
     all_sprites = pygame.sprite.Group()
 
-    # земля
-    ground = Platform(0, HEIGHT - GROUND_HEIGHT, WIDTH, GROUND_HEIGHT, color=BLACK)
+    # земля (пол)
+    ground = Platform(0, HEIGHT - GROUND_HEIGHT, WIDTH, GROUND_HEIGHT, platform_type="ground")
     platforms.add(ground)
     all_sprites.add(ground)
 
-    # несколько платформ
+    # Платформы - все подняты над землей, чтобы не касаться пола
     level_platforms = [
-        Platform(200, 360, 120, 20),
-        Platform(380, 300, 120, 20),
-        Platform(560, 260, 120, 20),
-        Platform(350, 420, 80, 20),
+        # x, y, ширина, тип
+        Platform(200, 340, 120, 20),  # Поднял с 360 → 340
+        Platform(380, 280, 120, 20),  # Поднял с 300 → 280
+        Platform(560, 240, 120, 20),  # Поднял с 260 → 240
+        Platform(350, 400, 80, 20),  # Поднял с 420 → 400
     ]
+
     for p in level_platforms:
         platforms.add(p)
         all_sprites.add(p)
@@ -38,8 +40,14 @@ def create_game_objects():
     enemies.add(enemy)
     all_sprites.add(enemy)
 
-    # монеты
-    coin_positions = [(230, 330), (410, 270), (590, 230), (380, 390)]
+    # монеты - скорректированы под новые позиции платформ
+    coin_positions = [
+        (230, 310),  # Монета на первой платформе (было 330)
+        (410, 250),  # Монета на второй платформе (было 270)
+        (590, 210),  # Монета на третьей платформе (было 230)
+        (380, 370),  # Монета на четвертой платформе (было 390)
+    ]
+
     for cx, cy in coin_positions:
         c = Coin(cx, cy)
         coins.add(c)
@@ -93,11 +101,9 @@ def game_loop():
             continue
 
         if victory:
-            # Рисуем фон
             WIN.blit(background, (0, 0))
             all_sprites.draw(WIN)
 
-            # Затемняющий overlay
             s = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
             s.fill((0, 0, 0, 128))
             WIN.blit(s, (0, 0))
@@ -112,25 +118,23 @@ def game_loop():
             pygame.display.flip()
             continue
 
-        # обновление
         enemies.update()
         player.update(platforms, enemies, coins)
 
-        # отрисовка
         WIN.blit(background, (0, 0))
         all_sprites.draw(WIN)
 
-        # HUD - компактнее
+        # HUD
         hud_font = FONT_HUD
 
         coins_text = hud_font.render(f"Монеты: {player.coins_collected}", True, BLACK)
         lives_text = hud_font.render(f"Жизни: {player.lives}", True, BLACK)
-        coins_left = hud_font.render(f"Ост. монет: {len(coins)}", True, BLACK)
+        coins_left = hud_font.render(f"Ост: {len(coins)}", True, BLACK)
         enemies_left = hud_font.render(f"Враги: {len(enemies)}", True, BLACK)
         total_text = hud_font.render(f"Очки: {player.total_score}", True, BLACK)
         menu_hint = hud_font.render("ESC", True, BLACK)
 
-        # Компактный HUD
+        # Полупрозрачный фон для HUD
         hud_bg = pygame.Surface((180, 100))
         hud_bg.set_alpha(180)
         hud_bg.fill((255, 255, 255))
