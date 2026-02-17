@@ -106,19 +106,10 @@
 git clone https://github.com/yourusername/Gabeitch.git
 cd Gabeitch
 
-# 2. Создайте виртуальное окружение (по примерам ниже или любым другим способом)
-# Windows:
-python -m venv venv
-venv\Scripts\activate
-
-# Linux/Mac:
-python3 -m venv venv
-source venv/bin/activate
-
-# 3. Установите зависимости
+# 2. Установите зависимости
 pip install -r requirements.txt
 
-# 4. Запустите игру
+# 3. Запустите игру
 python main.py
 ```
 
